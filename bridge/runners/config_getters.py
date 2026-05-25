@@ -22,7 +22,7 @@ def worker_init_fn(worker_id):
 
 def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
-    if dataset_tag in [DATASET_MNIST, DATASET_EMNIST, DATASET_CIFAR10] or dataset_tag.startswith(DATASET_AFHQ):
+    if dataset_tag in [DATASET_MNIST, DATASET_EMNIST, DATASET_CIFAR10, DATASET_CUSTOM_SOURCE] or dataset_tag.startswith(DATASET_AFHQ):
         return ImPlotter(runner, args)
     elif dataset_tag in [DATASET_DOWNSCALER_LOW, DATASET_DOWNSCALER_HIGH]:
         return DownscalerPlotter(runner, args)
@@ -171,6 +171,8 @@ DATASET_CIFAR10 = 'cifar10'
 DATASET_AFHQ = 'afhq'
 DATASET_DOWNSCALER_LOW = 'downscaler_low'
 DATASET_DOWNSCALER_HIGH = 'downscaler_high'
+DATASET_CUSTOM_SOURCE = 'custom_source'
+DATASET_CUSTOM_TARGET = 'custom_target'
 
 def get_datasets(args):
     dataset_tag = getattr(args, DATASET)
@@ -207,6 +209,20 @@ def get_datasets(args):
         assert args.data.image_size == 512
         animal_type = dataset_tag.split('_')[1]
         init_ds = AFHQ(root_dir=os.path.join(args.paths.afhq_path, 'train'), animal_type=animal_type)
+
+    # Custom ImageFolder dataset
+    if dataset_tag == DATASET_CUSTOM_SOURCE:
+        source_dir = getattr(args, 'custom_source_dir')
+        if not os.path.isabs(source_dir):
+            source_dir = os.path.join(data_dir, source_dir)
+        image_size = args.data.image_size
+        train_transform = cmp([
+            transforms.Resize(image_size),
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ])
+        init_ds = torchvision.datasets.ImageFolder(root=source_dir, transform=train_transform)
 
     # Downscaler dataset
     if dataset_tag == DATASET_DOWNSCALER_HIGH:
@@ -252,6 +268,19 @@ def get_final_dataset(args, init_ds):
             assert args.data.image_size == 512
             animal_type = dataset_transfer_tag.split('_')[1]
             final_ds = AFHQ(root_dir=os.path.join(args.paths.afhq_path, 'train'), animal_type=animal_type)
+
+        if dataset_transfer_tag == DATASET_CUSTOM_TARGET:
+            target_dir = getattr(args, 'custom_target_dir')
+            if not os.path.isabs(target_dir):
+                target_dir = os.path.join(data_dir, target_dir)
+            image_size = args.data.image_size
+            train_transform = cmp([
+                transforms.Resize(image_size),
+                transforms.CenterCrop(image_size),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ])
+            final_ds = torchvision.datasets.ImageFolder(root=target_dir, transform=train_transform)
 
         if dataset_transfer_tag == DATASET_DOWNSCALER_LOW:
             root = os.path.join(data_dir, 'downscaler')
